@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bienes de Interes Comun - Asturias</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-0evHe/X+R7YkIZDRvuzKMRqM+OrBnVFBL6DOitfPri4tjfHxaWutUpFmBp4vmVor" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css" integrity="sha512-hoalWLoI8r4UszCkZ5kL8vayOGVae1oxXe/2A4AO6J9+580uKHDO3JdHb7NzwwzK5xr/Fs0W40kiNHxM9vyTtQ==" crossorigin="" />
+    <link rel="stylesheet" href="css/MarkerCluster.css">
+    <link rel="stylesheet" href="css/MarkerCluster.Default.css">
+    <script src="lib/leaflet.js" integrity="sha512-BB3hKbKWOc9Ez/TAwyWxNXeoV9c1v6FIeYiBieIWkpLjauysF18NzgR1MBNBXf8/KABdlkX68nAhlwcDFLGPCQ==" crossorigin=""></script>
+    <!-- plugin de agrupacion de marcadores -->
+    <script src="lib/leaflet.markercluster.js"></script>
+    <script src="lib/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="https://stamen-maps.a.ssl.fastly.net/js/tile.stamen.js?v1.3.0"></script>
+    <script src="data/sitpa-bic.geojson"></script> <!-- var sitpa_bic_geojson -->
+    <script src="data/wiki-data.json"></script> <!-- var wiki_data -->
+    <script src="data/recinto-asturias.geojson"></script> <!-- var recinto_asturias_geojson -->
+    <style>
+        #mapa, #entradas {
+            height: 720px;
+        }
+        #entradas {
+            overflow: scroll;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">Bienes de Interés Cultural de Asturias</h1>
+        <div class="row">
+            <div class="col-md-8" id="mapa"></div>
+            <div class="col-md-4">
+                <ol id="entradas">
+                </ol>
+            </div>
+        </div>
+    </div>
+    <footer><div class="text-center p-6">2022 - Pablo Cienfuegos</div></footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprn3073KE6tl6bjs2QrFaJGz5/SUsLqktiwsUTF55Jfv3qYSDhgCecCxMW52nD2" crossorigin="anonymous"></script>
+    <script>
+        function bic_style(feature) {
+            console.log('bic_styleee');
+            return {
+                color: 'red',
+                fillColor: 'blue',
+                fillOpacity: 0.5,
+            };
+        }
+        var stamen_layer = new L.StamenTileLayer("watercolor");
+        var osm_layer = L.tileLayer('https://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+            maxZoom: 25,
+        });
+        var sitpa_bic_layer = L.geoJSON(sitpa_bic_geojson);
+        var recinto_asturias_layer = L.geoJSON(recinto_asturias_geojson, {
+            style: function(e) {
+                return {
+                    fillOpacity: 0.05,
+                };
+            },
+        });
+        // control layers
+        var basemaps = {
+            OSM: osm_layer,
+            Stamen: stamen_layer,
+            //'Bienes de interes cultural': sitpa_bic_layer,
+        };
+        var map = L.map('mapa', {
+            center: [43.36029, -5.84476],
+            zoom: 8,
+            layers: [osm_layer, recinto_asturias_layer],
+        });
+
+        var monument_layer = L.markerClusterGroup({ disableClusteringAtZoom: 16 });
+
+        L.control.layers(basemaps).addTo(map);
+        L.control.scale().addTo(map);
+
+        var icon_museum = L.icon({
+            iconUrl: 'img/museum-icon.png',
+            iconSize: [48, 48],
+        });
+        // sitpa bienes de interes cultural
+        var all_markers = [];
+        sitpa_bic_layer.eachLayer(function(feature) {
+            var lnglat = feature.feature.geometry.coordinates;
+            var latlng = [lnglat[1], lnglat[0]];
+            var oid = feature.feature.properties['OBJECTID'];
+            var nombre = feature.feature.properties['Nombre'];
+            // si no esta en nuestro diccionario de bienes no lo incluimos
+            if(!wiki_data.hasOwnProperty(oid)) {
+                console.log(`no oid ${oid}`);
+                return;
+            }
+            // crea el contenido del popup
+            var extra_data = wiki_data[oid];
+            var image = 'img/' + extra_data['image'];
+            var descripcion = extra_data['descripcion'];
+            var wikiurl = 'https://es.wikipedia.org' + extra_data['url'];
+            var card_title = `<h5 class="card-title">${nombre}</h5>`;
+            var card_ref = `<a href="${wikiurl}">[1]</a>`;
+            var card_text = `<p class="card-text">${descripcion}</p>`;
+            var card_body = `<div class="card-body">${card_title}${card_text}${card_ref}</div>`;
+            var content_img = `<img src="${image}" class="card-img-top" alt="Imagen del monumento">`;
+            var content = `<div class="card" style="width: 18rem;">${content_img}${card_body}</div>`;
+            // crea el marcador
+            var m = L.marker(latlng, {
+                title: nombre,
+                content: content,
+                icon: icon_museum, 
+            });
+            m.bindPopup(content);
+            monument_layer.addLayer(m);
+            map.addLayer(monument_layer);
+            // crea el link lateral que abre el popup y cambia la vista al monumento
+            var smart_link = $(`<a href="#">${nombre}</a>`);
+            smart_link.click(function() {
+                monument_layer.zoomToShowLayer(m);
+                m.openPopup();
+            });
+            all_markers.push(m);
+            // poner el link en la lista lateral de la web
+            var li_dom = $("<li></li>");
+            li_dom.append(smart_link);
+            li_dom.append($(`<a href="${wikiurl}">[*]</a>`));
+            $("#entradas").append(li_dom);
+        });
+    </script>
+</body>
+</html>
